@@ -1,0 +1,5 @@
+data/face_landmarker.task
+__pycache__/
+*.pyc
+.venv/
+processing/project/out/
