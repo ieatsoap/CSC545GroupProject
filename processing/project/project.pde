@@ -1,83 +1,108 @@
-import processing.video.*;
 import processing.net.*;
 
-Capture cam; // Camera
-Client pyClient; // Python client
+Client pyClient; // Python client for receiving eye data
 
-int lx, ly, lw, lh; // Left eye coords
-int rx, ry, rw, rh; // Right eye coords
-boolean hasData = false; // Data presence flag
-int PADDING = 10; // Eye bounding box padding
+PImage leftEye, rightEye; // PImages to hold the left and right eye frames
+boolean hasFrames = false; // Flag to indicate if valid eye frames have been received
 
-String latestLine = null; // Latest buffered line from Python
-String HOST = "127.0.0.1"; // Host location
-int PORT = 5001; // Host port
-
-int WINDOW_W = 640, WINDOW_H = 480; // Display window size
-
-void setup() { // Start everything up
-  windowResizable(true);
-  cam = new Capture(this, WINDOW_W, WINDOW_H, 30);
-  cam.start();
-  pyClient = new Client(this, HOST, PORT);
+// Set window size and initialize pyClient, leftEye, and rightEye
+void setup() {
+  size(960, 640);
+  pyClient = new Client(this, "127.0.0.1", 5001);
+  leftEye = createImage(480, 640, RGB);
+  rightEye = createImage(480, 640, RGB);
 }
 
-void settings() {
-  size(WINDOW_W, WINDOW_H);
-}
-
+// Read data from pyClient when available and display
 void draw() {
-  if (cam.available()) {
-    cam.read();
+  readData();
+  background(0);
+
+  if (!hasFrames) {
+    fill(255);
+    textSize(16);
+    textAlign(CENTER, CENTER);
+    text("waiting for eye data...", width / 2, height / 2);
+    return;
   }
-  image(cam, 0, 0); // Display camera image
 
-  drainCoords(); // Ignore old eye coordinates
-  applyLatestLine(); // Fetch most recent eye coords
-
-  if (!hasData) {
-    return; // If no data present, skip draw iteration
-  }
-
-  noFill();
-  stroke(0, 255, 0);
-  strokeWeight(2);
-  rect(lx - PADDING, ly - PADDING, lw + PADDING * 2, lh + PADDING * 2); // Left eye bounding box
-  rect(rx - PADDING, ry - PADDING, rw + PADDING * 2, rh + PADDING * 2); // Right eye bounding box
+  image(leftEye, 0, 0); // ------------------------------------------------------------------- Use these closeup PImages for further gaze detection
+  image(rightEye, 480, 0); // ---------------------------------------------------------------- Use these closeup PImages for further gaze detection
 }
 
-void drainCoords() {
-  while (pyClient.available() > 0) {
-    String line = pyClient.readStringUntil('\n'); // Read until delimiting character
-    if (line == null) {
-      break; // If we are 'caught up' exit function
-    }
-    line = trim(line); // Trim pyClient read
-    if (line.length() > 0) {
-      latestLine = line; // Assign latest line
-    }
+// Read data from pyClient, decode JPEG images, and update leftEye and rightEye
+void readData() {
+  if (pyClient.available() <= 0) {
+    return;
+  } // Check if data is available
+
+  String line = pyClient.readStringUntil('\n');
+  if (line == null) {
+    return;
+  } // Remove any trailing newline characters
+
+  line = trim(line); // Trim whitespace from the line
+
+  if (line.equals("none")) {
+    hasFrames = false;
+    return;
+  } // If "none" message is received, set hasFrames to false and return
+
+  if (!line.equals("ok")) {
+    return;
+  } // If the message is not "ok", ignore it and return
+
+  // Read left and right JPEG image sizes (4 bytes each) and then read the JPEG data
+  byte[] leftSizeBuf = pyClient.readBytes(4);
+  if (leftSizeBuf == null || leftSizeBuf.length < 4) {
+    return;
+  }
+  int leftSize = ((leftSizeBuf[0] & 0xFF) << 24) |
+                 ((leftSizeBuf[1] & 0xFF) << 16) |
+                 ((leftSizeBuf[2] & 0xFF) << 8)  |
+                 ((leftSizeBuf[3] & 0xFF));
+
+  byte[] leftBytes = pyClient.readBytes(leftSize);
+  if (leftBytes == null || leftBytes.length < leftSize) {
+    return;
+  }
+
+  byte[] rightSizeBuf = pyClient.readBytes(4);
+  if (rightSizeBuf == null || rightSizeBuf.length < 4) {
+    return;
+  }
+  int rightSize = ((rightSizeBuf[0] & 0xFF) << 24) |
+                  ((rightSizeBuf[1] & 0xFF) << 16) |
+                  ((rightSizeBuf[2] & 0xFF) << 8)  |
+                  ((rightSizeBuf[3] & 0xFF));
+
+  byte[] rightBytes = pyClient.readBytes(rightSize);
+  if (rightBytes == null || rightBytes.length < rightSize) {
+    return;
+  }
+
+  // Decode JPEG byte arrays into PImage objects
+  PImage decodedLeft = decodeJpeg(leftBytes);
+  PImage decodedRight = decodeJpeg(rightBytes);
+
+  // Update leftEye, rightEye, and hasFrames if both images were successfully decoded
+  if (decodedLeft != null && decodedRight != null) {
+    leftEye = decodedLeft;
+    rightEye = decodedRight;
+    hasFrames = true;
   }
 }
 
-void applyLatestLine() {
-  if (latestLine == null) {
-    return; // If no latest line, exit function
+// Decode JPEG byte array into a PImage object using Java's ImageIO
+PImage decodeJpeg(byte[] jpegBytes) {
+  try {
+    java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(jpegBytes);
+    java.awt.image.BufferedImage bimg = javax.imageio.ImageIO.read(bis);
+    PImage img = new PImage(bimg.getWidth(), bimg.getHeight(), RGB);
+    bimg.getRGB(0, 0, img.width, img.height, img.pixels, 0, img.width);
+    img.updatePixels();
+    return img;
+  } catch (Exception e) {
+    return null;
   }
-
-  String[] parts = split(latestLine, ',');
-  if (parts.length < 8) {
-    return; // If incorrect formatting, exit function
-  }
-
-  // Store eye coords for use
-  lx = int(parts[0]);
-  ly = int(parts[1]);
-  lw = int(parts[2]);
-  lh = int(parts[3]);
-  rx = int(parts[4]);
-  ry = int(parts[5]);
-  rw = int(parts[6]);
-  rh = int(parts[7]);
-  hasData = true; // Update data flag
-  latestLine = null; // Clear line variable
 }
