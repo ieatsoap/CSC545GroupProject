@@ -1,32 +1,43 @@
-# CSC545GroupProject
-Augments images depending on the user's gaze
+# CSC545 Group Project
 
-### Requirements
-- Python 3.10+
-- Processing 4 with the following libraries installed via Library Manager:
-  - Video
-  - Network
+Streams webcam gaze coordinates to a Processing sketch via UDP. A white circle follows your eyes on a black screen.
 
-### Setup
-run once after cloning:
-    ./setup.sh
+## Requirements
 
-### Running
-1. start Python server:
-    python3 python/main.py
+- Python 3.11
+- [Processing 4](https://processing.org/download) with the **UDP by Hypermedia** library
 
-2. open and run processing/project/project.pde
+## Setup
+(uses [uv](https://docs.astral.sh/uv/getting-started/installation/) as Python package/version manager)
 
-### Setup
-**Mac/Linux:**
-```bash
-chmod +x setup.sh
-./setup.sh
+**Windows**
+```
+uv init --python 3.11
+uv venv
+.venv/Scripts/activate
+uv add -r requirements.txt
 ```
 
-**Windows:**
-open Git Bash in the project folder (right click → "Git Bash Here"), then:
-```bash
-chmod +x setup.sh
-./setup.sh
+**Mac**
 ```
+uv init --python 3.11
+uv venv
+source .venv/bin/activate
+uv add -r requirements.txt
+```
+
+### Processing
+
+Open Processing → Sketch → Import Library → Manage Libraries → search **UDP** → Install
+
+## Run
+
+1. Run the Python sender:
+```
+uv run gaze_sender.py
+```
+2. Follow the calibration dots
+3. Once calibration window exits fullscreen, open `gaze_receiver/gaze_receiver.pde` in Processing and click Run
+
+**Note:**
+PyGame windows have minimizing issues on Mac. The calibration window will freeze after calibration is done--just run the Processing program regardless. Do not force quit the PyGame window.
