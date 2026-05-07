@@ -1,0 +1,5 @@
+gazefollower
+opencv-python
+pygame
+numpy
+mediapipe==0.10.9
