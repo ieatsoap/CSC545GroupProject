@@ -46,7 +46,6 @@ if gf:
 smoothed_x, smoothed_y = None, None
 last_valid_x, last_valid_y = info.current_w // 2, info.current_h // 2
 
-=
 try:
     while True:
         pygame.event.pump()
